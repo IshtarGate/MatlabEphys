@@ -1,0 +1,242 @@
+%% Load Trace and condense dimension
+set(0,'DefaultFigureWindowStyle','docked');
+set(0,'DefaultFigureCreateFcn','zoom on');
+clear
+close all
+[filename,path] = uigetfile('*.abf','.abf File','MultiSelect','on');
+cd(path)
+path_filename = strcat(path,filename);
+firstfilename=char(filename);
+firstfilename=firstfilename(1:17)
+[d,si,header]=abfload(path_filename);%si is the sampling interval usually in micro seconds
+data = zeros(size(d,1),size(d,3));
+for i = 1:size(d,3);%condense the file
+    data(:,i) = d(:,2,i);
+end;
+%% Load TTX trace and condense dimension
+try
+    %%this looks for a ttx subtracted trace
+    nottx=0;
+    [filename,path] = uigetfile('*.abf','.abf File','MultiSelect','on');
+    cd(path)
+    path_filename = strcat(path,filename);
+    %%this loads the ttx subtracted trace
+    [d,si,header]=abfload(path_filename);
+    data2 = zeros(size(d,1),size(d,3));
+    for i = 1:size(d,3);%condense the file
+        data2(:,i) = d(:,2,i);
+    end;
+catch
+    nottx=1;
+end
+%% set time column
+time=zeros(size(data,1),1);
+for i=1:size(data,1)
+    time(i)=si/1000*i;
+end
+%% data manipulation
+% with ttx trace
+if nottx==0
+    test=zeros(size(data,1),size(data,2));
+    for i=1:size(data,2)
+        test(:,i)=data(:,i)-data2(:,i);
+    end
+end
+% without ttx trace
+if nottx==1
+    test=data;
+end
+%% First trace subtraction
+test2=zeros(size(test,1),size(test,2));
+for i=1:size(test,2)
+    test2(:,i)=test(:,i)-test(:,1);
+end
+
+%% plot the uncorrected trace
+figure(1)
+h = figure(1);
+set(h,'name',char('Uncorrected'),'numbertitle','off');
+
+graphmin=min(min(data(667:end,:)))-5;
+graphmax=max(max(data(667:end,:)))+5;
+graphstart=time(1);
+graphend=time(end);
+for i=1:size(data,2)
+    subplot(5,3,i);
+    plot(time,smooth(data(:,i)));
+    axis manual;
+    axis([graphstart, graphend, graphmin, graphmax]);
+end
+%% plot the ttx trace
+if nottx==0
+    figure(6)
+    h = figure(6);
+    set(h,'name',char('TTX'),'numbertitle','off');
+    
+    graphmin=min(min(data(667:end,:)))-5;
+    graphmax=max(max(data(667:end,:)))+5;
+    graphstart=time(1);
+    graphend=time(end);
+    for i=1:size(data,2)
+        subplot(5,3,i);
+        plot(time,smooth(data2(:,i)));
+        axis manual;
+        axis([graphstart, graphend, graphmin, graphmax]);
+    end
+end
+%% plot the corrected trace
+figure(2)
+h = figure(2);
+set(h,'name',char('Corrected'),'numbertitle','off');
+
+graphmin=min(min(data(667:end,:)))-5;
+graphmax=max(max(data(667:end,:)))+5;
+graphstart=time(1);
+graphend=time(end);
+for i=1:size(test2,2)
+    subplot(5,3,i);
+    plot(time,test2(:,i));
+    axis manual;
+    axis([graphstart, graphend, graphmin, graphmax]);
+end
+
+%% iv plot and measurement
+resmin=zeros(size(test2,2),1);
+set(0,'DefaultFigureCreateFcn','zoom on');
+figure (2)
+
+for i=1:size(test2,2)
+    temp_time=find(time>=27,1):find(time>=50,1);
+    [y,idxmin]=min(smooth(test2(temp_time,i),40));
+    idxmin=idxmin+temp_time(1);
+    subplot(5,3,i);
+    hold on;
+    zoom on;
+    plot(time(idxmin),y,'ro');
+    plot(time(temp_time),smooth(test2(temp_time,i),40),'g'); % y=mean(test2(find(time>=27,1):find(time>=50,1),i));%test2(idx-20:idx+20,i));
+    resmin(i,1)=y;
+end
+saveas(1,strcat(firstfilename,' 1 uncorrected trace'),'jpg')
+saveas(2,strcat(firstfilename,' 2 corrected trace'),'jpg')
+
+%% change resmin
+resmin2(1:size(data,2),1)=-100:10:(-100+10*(size(data,2)-1));
+resmin2(:,2)=resmin;
+%% plot iv using resmin
+figure(3)
+h = figure(3);
+set(h,'name',char('I V Plot'),'numbertitle','off');
+plot(resmin2(:,1),resmin2(:,2))
+saveas(3,strcat(firstfilename,' 3 iv'),'jpg')
+%% normalize resmin
+resmin2(:,2)=resmin2(:,2)/min(resmin2(:,2));
+%% find index of min(resmin)
+idxpeak=find(resmin2(:,2)==1);
+%% find m and b
+if idxpeak+3>size(data,2)
+    upperidx=idxpeak+2;
+    disp('not enough points past peak current to use 3 points for mx+b');
+else
+    upperidx=idxpeak+3;
+end
+loweridx=idxpeak+1;
+p=polyfit(resmin2(loweridx:upperidx,1), resmin2(loweridx:upperidx,2),1);
+
+%% resmin to conductance
+for i=1:size(resmin2,1)
+    resmin2(i,2)=resmin2(i,2)/(p(1)*resmin2(i,1)+p(2));
+end
+%% generate mega: a variable to store resmin and error
+mega=zeros(size(data,2),4);
+mega(:,1)=-100:10:(-100+10*(size(data,2)-1));
+mega(:,2)=resmin2(:,2);
+%% begin vhalf and kd matricies
+vhalf_lower=-100;
+vhalf_upper=20;
+vhalf_step=(vhalf_lower-vhalf_upper)/9;
+vhalf_matrix=vhalf_lower:abs(vhalf_step):vhalf_upper;
+
+kd_lower=-100;
+kd_upper=20;
+kd_step=(kd_lower-kd_upper)/9;
+kd_matrix=kd_lower:abs(kd_step):kd_upper;
+%% run error calculations and store to error matrix
+sum_error=zeros(10,10);
+for kd_i=1:size(kd_matrix,2)
+    kd_value_now=kd_matrix(1,kd_i);
+    for vhalf_i=1:size(vhalf_matrix,2)
+        vhalf_value_now=(vhalf_matrix(1,vhalf_i));
+        for i=1:size(mega,1)
+            mega(i,3)=(1/(1+exp((mega(i,1)-vhalf_value_now)/kd_value_now)));
+            mega(i,4)=(mega(i,2)-mega(i,3))^2;
+        end
+        sum_error(kd_i,vhalf_i)=sum(mega(1:idxpeak,4));% refer to kd as rows and vhalf as the columns
+    end
+end
+[r,c]=find(sum_error==min(min(sum_error)));
+%% now the iterations start
+variable_range=.5;%the percentage that kd or vhalf is increased or decreased each iteration
+iterations=10;
+fit_over_time=zeros(2,iterations);
+for iteration=1:iterations
+    
+    vhalf_lower=vhalf_matrix(1,c-1);
+    vhalf_upper=vhalf_matrix(1,c+1);
+    vhalf_step=(vhalf_lower-vhalf_upper)/9;
+    vhalf_matrix=vhalf_lower:abs(vhalf_step):vhalf_upper;
+    
+    kd_lower=kd_matrix(1,r-1);
+    kd_upper=kd_matrix(1,r+1);
+    kd_step=(kd_lower-kd_upper)/9;
+    kd_matrix=kd_lower:abs(kd_step):kd_upper;
+    
+    sum_error=zeros(10,10);
+    for kd_i=1:size(kd_matrix,2)
+        kd_value_now=kd_matrix(1,kd_i);
+        for vhalf_i=1:size(vhalf_matrix,2)
+            vhalf_value_now=(vhalf_matrix(1,vhalf_i));
+            for i=1:size(mega,1)
+                mega(i,3)=(1/(1+exp((mega(i,1)-vhalf_value_now)/kd_value_now)));
+                mega(i,4)=(mega(i,2)-mega(i,3))^2;
+            end
+            sum_error(kd_i,vhalf_i)=sum(mega(1:idxpeak,4));% refer to kd as rows and vhalf as the columns
+        end
+    end
+    [r,c]=find(sum_error==min(min(sum_error)));
+    Boltzman=[vhalf_matrix(1,c);kd_matrix(1,r)];
+    fit_over_time(:,iteration)=Boltzman;
+end
+
+disp('Final vhalf=');
+disp(vhalf_matrix(1,c));
+disp('Final Kd=');
+disp(kd_matrix(1,r));
+disp('Error Kd=');
+disp(min(min(sum_error)));
+%% results to copy to excel
+finalanswer=cell(1,31);
+finalanswer(1,1:3)=[num2cell(vhalf_matrix(1,c)) ...
+    num2cell(kd_matrix(1,r)) ...
+    num2cell(min(min(sum_error)))];
+finalanswer(1,5:4+size(data,2))=num2cell(resmin');
+finalanswer(1,19:18+size(data,2))=num2cell(mega(:,3)');
+
+%% figure:fit over time
+figure(4)
+h = figure(4);
+set(h,'name',char('Fit over time'),'numbertitle','off');
+plot(1:iterations,fit_over_time(1,:),1:iterations,fit_over_time(2,:))
+%% figure: conductance
+figure(5)
+h = figure(5);
+set(h,'name',char('Conductance'),'numbertitle','off');
+for i=1:size(mega,1)
+    mega(i,3)=(1/(1+exp((mega(i,1)-vhalf_matrix(1,c))/kd_matrix(1,r))));
+    mega(i,4)=(mega(i,2)-mega(i,3))^2;
+end
+plot(mega(:,1),mega(:,3),mega(:,1),mega(:,2),'ro')
+axis manual;
+    axis([-100, 20, 0, 1])
+saveas(5,strcat(firstfilename,' 5 Boltzman'),'jpg')
+commandwindow
+
