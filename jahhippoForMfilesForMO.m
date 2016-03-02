@@ -7,7 +7,8 @@ close all
 tic
 %% Protocol??
 commandwindow;
-protocolBeingAnalyzed=input('1=CCIV, 2=evoked, 3=Ihy 4=Thy 5=CCIVhippo 6=EPR hippo:  ');
+% protocolBeingAnalyzed=5;
+protocolBeingAnalyzed=input('1=CCIV, 2=evoked, 3=Ihy 4=Thy 5=CCIVhippo 6=EPR hippo');
 commandwindow;
 %% uigetfile
 
@@ -60,7 +61,7 @@ for fileNumber=filesToRunThrough;
     
     if protocolBeingAnalyzed==2
         axisSettings=[0, 100, min_of_data, max_of_data];
-        apROIindexOne=find(time>=5,1);
+        apROIindexOne=find(time>=10,1);
         apROIindexTwo=find(time>=70,1);
         irROIone=find(time>=5,1);% input resistance ROI's
         irROItwo=find(time>=45,1);
@@ -139,13 +140,13 @@ for fileNumber=filesToRunThrough;
         %         else
         %         end
         
-        MPD=2;%min peak distance
-        MPH=-10;%min peak height
+        MPD=2;%mean peak distance
+        MPH=-10;%mean peak height
         MPP=10;%MinPeakProminence
         dataForPeaks=sweepOfInterest(apROIindexOne:apROIindexTwo);
         timeForPeaks=time(apROIindexOne:apROIindexTwo);
         if max(sweepOfInterest(apROIindexOne:apROIindexTwo))>=MPH
-            [peaks,locs]=PeakDetUse(dataForPeaks,timeForPeaks,MPP,MPH);
+            [peaks,locs]=PeakDetUse(dataForPeaks,timeForPeaks,MPD,MPH);
 %           [peaks,locs]=findpeaks(dataForPeaks,timeForPeaks,...%% replaced findpeaks with PeakDetUse
 %                 'MinPeakDistance',MPD,...
 %                 'MinPeakHeight',MPH,...
@@ -252,8 +253,8 @@ for fileNumber=filesToRunThrough;
         IRtable=NaN(numberOfFiles,50);
     else
     end
-%     if sweepOfFirstAp>2
-        if isequal(protocolBeingAnalyzed , 1 || 3 || 4 || 5 || 6)
+    if sweepOfFirstAp>5
+        if protocolBeingAnalyzed== 1 || 3 || 4 || 5 || 6
             figure(6);
             clf
             h = figure(6);
@@ -315,15 +316,13 @@ for fileNumber=filesToRunThrough;
             negativeIR=NaN;
             positiveIR=NaN;
             totalIR=NaN;
-            disp('jaherror-05');
         end
-%     else
-%         IRvoltageSteps=NaN(1,1);
-%         negativeIR=NaN;
-%         positiveIR=NaN;
-%         totalIR=NaN;
-%         disp('jaherror-06');
-%     end
+    else
+        IRvoltageSteps=NaN(1,1);
+        negativeIR=NaN;
+        positiveIR=NaN;
+        totalIR=NaN;
+    end
     %% Are there action potentials
     if exist('sweepOfFirstAp','var')==1 && isempty(sweepOfFirstAp)==0
         %% Plot First Ap
@@ -376,20 +375,15 @@ for fileNumber=filesToRunThrough;
         %         try
         %         apIdx(1)=find(d(autophase1-500:autophase1,sweepOfFirstAp)<=-50,1,'Last');
         %         catch
-        apIdx(1)=autophase2-500;
+        apIdx(1)=autophase2-100;
         %         end
         %
         %         try
         %         apIdx(2)=find(d(autophase1+500:autophase1,sweepOfFirstAp)<=-50,1);
         %         catch
-        apIdx(2)=autophase2+500;
+        apIdx(2)=autophase2+100;
         %         end
-        if protocolBeingAnalyzed==2
-            apIdx(1)=autophase2-find(d(autophase2-75:autophase2)<-60,1,'last');
-            apIdx(2)=autophase2+200;
-        end
-        hold on
-        plot(time(apIdx(1)),d(apIdx(1),sweepOfFirstAp),'ko',time(apIdx(2)),d(apIdx(2),sweepOfFirstAp),'ko');
+        hold on        plot(time(apIdx(1)),d(apIdx(1),sweepOfFirstAp),'ko',time(apIdx(2)),d(apIdx(2),sweepOfFirstAp),'ko');
         
         %% phaseplot
         %make the first derivative matrix

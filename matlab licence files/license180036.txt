@@ -1,0 +1,6 @@
+# BEGIN--------------BEGIN--------------BEGIN
+SERVER lm4.license.Virginia.EDU 005056821086 1702
+SERVER lm5.license.Virginia.EDU 005056826d73 1702
+SERVER lm6.license.Virginia.EDU 005056826491 1702
+USE_SERVER
+# END-----------------END-----------------END
